@@ -1,0 +1,43 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.11.35327.3
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FaceAppWithGPT2", "FaceAppWithGPT2\FaceAppWithGPT2.csproj", "{169C2330-9A16-4822-9E00-89410179FE3C}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ImageProcessingLibrary", "ImageProcessingLibrary\ImageProcessingLibrary.csproj", "{45443916-D62F-49D0-B02A-AF711CB5C104}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FaceMorphingLibrary", "FaceMorphingLibrary\FaceMorphingLibrary.csproj", "{BD7851FA-64F6-4EB5-9B67-AED50407500F}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "VideoGenerationLibrary", "VideoGenerationLibrary\VideoGenerationLibrary.csproj", "{B9BEB4C2-77FC-499D-AEC7-33BBB8106680}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{169C2330-9A16-4822-9E00-89410179FE3C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{169C2330-9A16-4822-9E00-89410179FE3C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{169C2330-9A16-4822-9E00-89410179FE3C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{169C2330-9A16-4822-9E00-89410179FE3C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{45443916-D62F-49D0-B02A-AF711CB5C104}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{45443916-D62F-49D0-B02A-AF711CB5C104}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{45443916-D62F-49D0-B02A-AF711CB5C104}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{45443916-D62F-49D0-B02A-AF711CB5C104}.Release|Any CPU.Build.0 = Release|Any CPU
+		{BD7851FA-64F6-4EB5-9B67-AED50407500F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BD7851FA-64F6-4EB5-9B67-AED50407500F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BD7851FA-64F6-4EB5-9B67-AED50407500F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BD7851FA-64F6-4EB5-9B67-AED50407500F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B9BEB4C2-77FC-499D-AEC7-33BBB8106680}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B9BEB4C2-77FC-499D-AEC7-33BBB8106680}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B9BEB4C2-77FC-499D-AEC7-33BBB8106680}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B9BEB4C2-77FC-499D-AEC7-33BBB8106680}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {8F368DA1-CAAB-495C-AD7F-E682D2E866C5}
+	EndGlobalSection
+EndGlobal
