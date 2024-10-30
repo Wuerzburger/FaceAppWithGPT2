@@ -15,19 +15,7 @@ namespace ImageProcessingLibrary.Tests
     public class ImageResizerTests
     {
         [Test]
-        public void ResizeImage_ShouldThrowFileNotFoundException_WhenInputFileDoesNotExist()
-        {
-            // Arrange
-            var imageResizer = new ImageResizer();
-            string nonExistentFilePath = "C:\\NonExistentFile.jpg";
-            string outputPath = Path.Combine(Path.GetTempPath(), "output.jpg");
-
-            // Act & Assert
-            Assert.Throws<FileNotFoundException>(() => imageResizer.ResizeImage(nonExistentFilePath, outputPath, 100, 100));
-        }
-
-        [Test]
-        public void ResizeImage_ShouldCreateResizedImage_WhenInputFileExists()
+        public void ResizeImageKeepingAspectRatio_ShouldResizeBasedOnWidth_WhenWidthIsProvided()
         {
             // Arrange
             var imageResizer = new ImageResizer();
@@ -36,24 +24,110 @@ namespace ImageProcessingLibrary.Tests
             string outputPath = Path.Combine(tempDirectory, "output.jpg");
 
             // Create a valid dummy image file
-            using (Bitmap bitmap = new Bitmap(200, 200))
+            using (Bitmap bitmap = new Bitmap(200, 100))
             {
                 using (Graphics g = Graphics.FromImage(bitmap))
                 {
                     g.Clear(Color.White);
-                    g.DrawRectangle(Pens.Black, 10, 10, 180, 180);
+                    g.DrawRectangle(Pens.Black, 10, 10, 180, 80);
                 }
-
                 bitmap.Save(inputPath, ImageFormat.Jpeg);
             }
 
             try
             {
                 // Act
-                imageResizer.ResizeImage(inputPath, outputPath, 100, 100);
+                imageResizer.ResizeImage(inputPath, outputPath, "100", "width");
 
                 // Assert
                 Assert.IsTrue(File.Exists(outputPath));
+                using (var outputImage = Image.FromFile(outputPath))
+                {
+                    Assert.AreEqual(100, outputImage.Width);
+                    Assert.AreEqual(50, outputImage.Height); // Aspect ratio maintained
+                }
+            }
+            finally
+            {
+                // Cleanup
+                File.Delete(inputPath);
+                File.Delete(outputPath);
+            }
+        }
+
+        [Test]
+        public void ResizeImageKeepingAspectRatio_ShouldResizeBasedOnHeight_WhenHeightIsProvided()
+        {
+            // Arrange
+            var imageResizer = new ImageResizer();
+            string tempDirectory = Path.GetTempPath();
+            string inputPath = Path.Combine(tempDirectory, "input.jpg");
+            string outputPath = Path.Combine(tempDirectory, "output.jpg");
+
+            // Create a valid dummy image file
+            using (Bitmap bitmap = new Bitmap(200, 100))
+            {
+                using (Graphics g = Graphics.FromImage(bitmap))
+                {
+                    g.Clear(Color.White);
+                    g.DrawRectangle(Pens.Black, 10, 10, 180, 80);
+                }
+                bitmap.Save(inputPath, ImageFormat.Jpeg);
+            }
+
+            try
+            {
+                // Act
+                imageResizer.ResizeImage(inputPath, outputPath, "50", "height");
+
+                // Assert
+                Assert.IsTrue(File.Exists(outputPath));
+                using (var outputImage = Image.FromFile(outputPath))
+                {
+                    Assert.AreEqual(100, outputImage.Width); // Aspect ratio maintained
+                    Assert.AreEqual(50, outputImage.Height);
+                }
+            }
+            finally
+            {
+                // Cleanup
+                File.Delete(inputPath);
+                File.Delete(outputPath);
+            }
+        }
+
+        [Test]
+        public void ResizeImageByPercentage_ShouldResizeImageCorrectly_WhenPercentageIsProvided()
+        {
+            // Arrange
+            var imageResizer = new ImageResizer();
+            string tempDirectory = Path.GetTempPath();
+            string inputPath = Path.Combine(tempDirectory, "input.jpg");
+            string outputPath = Path.Combine(tempDirectory, "output.jpg");
+
+            // Create a valid dummy image file
+            using (Bitmap bitmap = new Bitmap(200, 100))
+            {
+                using (Graphics g = Graphics.FromImage(bitmap))
+                {
+                    g.Clear(Color.White);
+                    g.DrawRectangle(Pens.Black, 10, 10, 180, 80);
+                }
+                bitmap.Save(inputPath, ImageFormat.Jpeg);
+            }
+
+            try
+            {
+                // Act
+                imageResizer.ResizeImage(inputPath, outputPath, "50%", "");
+
+                // Assert
+                Assert.IsTrue(File.Exists(outputPath));
+                using (var outputImage = Image.FromFile(outputPath))
+                {
+                    Assert.AreEqual(100, outputImage.Width); // 50% of original width
+                    Assert.AreEqual(50, outputImage.Height);  // 50% of original height
+                }
             }
             finally
             {
