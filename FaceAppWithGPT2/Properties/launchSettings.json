@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "FaceAppWithGPT2": {
+      "commandName": "Project",
+      "commandLineArgs": "D:\\FaceAppNara D:\\FaceMovieResized 50%"
+    }
+  }
+}
