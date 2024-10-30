@@ -1,11 +1,9 @@
 ﻿using Emgu.CV;
 using Emgu.CV.CvEnum;
 using ImageProcessingLibrary.Interfaces;
+using ImageProcessingLibrary.Logging;
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using System.IO;
 
 namespace ImageProcessingLibrary.PictureSizeAdaptation
 {
@@ -13,40 +11,55 @@ namespace ImageProcessingLibrary.PictureSizeAdaptation
     {
         public void ResizeImage(string inputPath, string outputPath, string resizeOption, string dimensionType)
         {
-            // Validate input paths
-            if (!File.Exists(inputPath))
+            try
             {
-                throw new FileNotFoundException($"Input file not found: {inputPath}");
-            }
+                // Log the start of the resize process
+                Logger.LogInfo($"Starting resizing for image: {inputPath}");
 
-            using (var image = CvInvoke.Imread(inputPath))
+                // Validate input paths
+                if (!File.Exists(inputPath))
+                {
+                    throw new FileNotFoundException($"Input file not found: {inputPath}");
+                }
+
+                using (var image = CvInvoke.Imread(inputPath))
+                {
+                    if (resizeOption.EndsWith("%"))
+                    {
+                        // Resize by percentage
+                        int percentage = int.Parse(resizeOption.TrimEnd('%'));
+                        using (var resizedImage = ResizeImageByPercentage(image, percentage))
+                        {
+                            CvInvoke.Imwrite(outputPath, resizedImage);
+                        }
+                    }
+                    else if (int.TryParse(resizeOption, out int fixedSize))
+                    {
+                        if (string.IsNullOrEmpty(dimensionType))
+                        {
+                            throw new ArgumentException("Dimension type must be specified when providing a fixed dimension.");
+                        }
+                        using (var resizedImage = dimensionType == "width"
+                            ? ResizeImageKeepingAspectRatio(image, fixedSize, isWidth: true)
+                            : ResizeImageKeepingAspectRatio(image, fixedSize, isWidth: false))
+                        {
+                            CvInvoke.Imwrite(outputPath, resizedImage);
+                        }
+                    }
+                    else
+                    {
+                        throw new ArgumentException("Invalid resize option. Provide a percentage or a fixed size for width or height.");
+                    }
+                }
+
+                // Log the completion of the resize process
+                Logger.LogInfo($"Successfully resized image: {inputPath} -> {outputPath}");
+            }
+            catch (Exception ex)
             {
-                if (resizeOption.EndsWith("%"))
-                {
-                    // Resize by percentage
-                    int percentage = int.Parse(resizeOption.TrimEnd('%'));
-                    using (var resizedImage = ResizeImageByPercentage(image, percentage))
-                    {
-                        CvInvoke.Imwrite(outputPath, resizedImage);
-                    }
-                }
-                else if (int.TryParse(resizeOption, out int fixedSize))
-                {
-                    if (string.IsNullOrEmpty(dimensionType))
-                    {
-                        throw new ArgumentException("Dimension type must be specified when providing a fixed dimension.");
-                    }
-                    using (var resizedImage = dimensionType == "width"
-                        ? ResizeImageKeepingAspectRatio(image, fixedSize, isWidth: true)
-                        : ResizeImageKeepingAspectRatio(image, fixedSize, isWidth: false))
-                    {
-                        CvInvoke.Imwrite(outputPath, resizedImage);
-                    }
-                }
-                else
-                {
-                    throw new ArgumentException("Invalid resize option. Provide a percentage or a fixed size for width or height.");
-                }
+                // Log any errors that occur
+                Logger.LogError($"Error resizing image {inputPath}: {ex.Message}");
+                throw;
             }
         }
 

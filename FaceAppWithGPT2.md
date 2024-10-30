@@ -12,14 +12,59 @@
 ### /FaceAppWithGPT2/Program.cs
 
 ```csharp
+using Emgu.CV;
+using ImageProcessingLibrary.Helpers;
+using ImageProcessingLibrary.PictureSizeAdaptation;
+
 namespace FaceAppWithGPT2
 {
     internal class Program
     {
         static void Main(string[] args)
         {
-            Console.WriteLine("Hello, World!");
+            if (args.Length < 3)
+            {
+                Console.WriteLine("Usage: FaceAppWithGPT2 <inputDirectory> <outputDirectory> <width|height|percentage> [dimensionType]");
+                Console.WriteLine("dimensionType: 'width' or 'height' (only required if providing a fixed dimension)");
+                return;
+            }
+
+            string inputDirectory = args[0];
+            string outputDirectory = args[1];
+            string resizeOption = args[2];
+            string dimensionType = args.Length > 3 ? args[3].ToLower() : string.Empty;
+
+            try
+            {
+                // Validate directories
+                DirectoryHelper.ValidateDirectory(inputDirectory);
+                if (!Directory.Exists(outputDirectory))
+                {
+                    Directory.CreateDirectory(outputDirectory);
+                }
+
+                // Get image files from the input directory
+                var imageFiles = DirectoryHelper.GetImageFiles(inputDirectory);
+
+                // Instantiate the ImageResizer
+                var imageResizer = new ImageResizer();
+
+                // Resize each image and save it to the output directory
+                foreach (var imagePath in imageFiles)
+                {
+                    string outputPath = Path.Combine(outputDirectory, Path.GetFileName(imagePath));
+                    imageResizer.ResizeImage(imagePath, outputPath, resizeOption, dimensionType);
+                    Console.WriteLine($"Resized image saved to: {outputPath}");
+                }
+
+                Console.WriteLine("Image resizing completed successfully.");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error: {ex.Message}");
+            }
         }
+    
     }
 }
 
@@ -93,6 +138,7 @@ namespace ImageProcessingLibrary.Helpers
 ### /ImageProcessingLibrary/Interfaces/IImageResizer.cs
 
 ```csharp
+using Emgu.CV;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -101,9 +147,65 @@ using System.Threading.Tasks;
 
 namespace ImageProcessingLibrary.Interfaces
 {
-    internal interface IImageResizer
+
+    
+        public interface IImageResizer
+        {
+            /// <summary>
+            /// Resizes the image while maintaining the aspect ratio, based on a given fixed size for width or height.
+            /// </summary>
+            /// <param name="inputPath">The path of the input image.</param>
+            /// <param name="outputPath">The path where the resized image will be saved.</param>
+            /// <param name="resizeOption">The resize option, either a fixed size or percentage.</param>
+            /// <param name="dimensionType">Indicates whether the fixed size is for width ("width") or height ("height").</param>
+            void ResizeImage(string inputPath, string outputPath, string resizeOption, string dimensionType);
+
+            /// <summary>
+            /// Resizes the image while maintaining the aspect ratio, based on a given fixed size for width or height.
+            /// </summary>
+            /// <param name="image">The input image as a Mat object.</param>
+            /// <param name="fixedSize">The fixed size for either width or height.</param>
+            /// <param name="isWidth">Indicates whether the fixed size is for width (true) or height (false).</param>
+            Mat ResizeImageKeepingAspectRatio(Mat image, int fixedSize, bool isWidth);
+
+            /// <summary>
+            /// Resizes the image by a given percentage, maintaining the original aspect ratio.
+            /// </summary>
+            /// <param name="image">The input image as a Mat object.</param>
+            /// <param name="percentage">The percentage by which the image should be resized.</param>
+            Mat ResizeImageByPercentage(Mat image, int percentage);
+        }
+}
+
+````
+
+### /ImageProcessingLibrary/Logging/Logger.cs
+
+```csharp
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace ImageProcessingLibrary.Logging
+{
+    public static class Logger
     {
-        void ResizeImage(string inputPath, string outputPath, int width, int height);
+        public static void LogInfo(string message)
+        {
+            Console.WriteLine($"[INFO] {DateTime.Now}: {message}");
+        }
+
+        public static void LogError(string message)
+        {
+            Console.WriteLine($"[ERROR] {DateTime.Now}: {message}");
+        }
+
+        public static void LogWarning(string message)
+        {
+            Console.WriteLine($"[WARNING] {DateTime.Now}: {message}");
+        }
     }
 }
 
@@ -113,35 +215,100 @@ namespace ImageProcessingLibrary.Interfaces
 
 ```csharp
 using Emgu.CV;
+using Emgu.CV.CvEnum;
 using ImageProcessingLibrary.Interfaces;
+using ImageProcessingLibrary.Logging;
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using System.IO;
 
 namespace ImageProcessingLibrary.PictureSizeAdaptation
 {
     public class ImageResizer : IImageResizer
     {
-        public void ResizeImage(string inputPath, string outputPath, int width, int height)
+        public void ResizeImage(string inputPath, string outputPath, string resizeOption, string dimensionType)
         {
-            // Validate input paths
-            if (!File.Exists(inputPath))
+            try
             {
-                throw new FileNotFoundException($"Input file not found: {inputPath}");
+                // Log the start of the resize process
+                Logger.LogInfo($"Starting resizing for image: {inputPath}");
+
+                // Validate input paths
+                if (!File.Exists(inputPath))
+                {
+                    throw new FileNotFoundException($"Input file not found: {inputPath}");
+                }
+
+                using (var image = CvInvoke.Imread(inputPath))
+                {
+                    if (resizeOption.EndsWith("%"))
+                    {
+                        // Resize by percentage
+                        int percentage = int.Parse(resizeOption.TrimEnd('%'));
+                        using (var resizedImage = ResizeImageByPercentage(image, percentage))
+                        {
+                            CvInvoke.Imwrite(outputPath, resizedImage);
+                        }
+                    }
+                    else if (int.TryParse(resizeOption, out int fixedSize))
+                    {
+                        if (string.IsNullOrEmpty(dimensionType))
+                        {
+                            throw new ArgumentException("Dimension type must be specified when providing a fixed dimension.");
+                        }
+                        using (var resizedImage = dimensionType == "width"
+                            ? ResizeImageKeepingAspectRatio(image, fixedSize, isWidth: true)
+                            : ResizeImageKeepingAspectRatio(image, fixedSize, isWidth: false))
+                        {
+                            CvInvoke.Imwrite(outputPath, resizedImage);
+                        }
+                    }
+                    else
+                    {
+                        throw new ArgumentException("Invalid resize option. Provide a percentage or a fixed size for width or height.");
+                    }
+                }
+
+                // Log the completion of the resize process
+                Logger.LogInfo($"Successfully resized image: {inputPath} -> {outputPath}");
+            }
+            catch (Exception ex)
+            {
+                // Log any errors that occur
+                Logger.LogError($"Error resizing image {inputPath}: {ex.Message}");
+                throw;
+            }
+        }
+
+        public Mat ResizeImageKeepingAspectRatio(Mat image, int fixedSize, bool isWidth)
+        {
+            int newWidth, newHeight;
+
+            if (isWidth)
+            {
+                newWidth = fixedSize;
+                newHeight = (int)(image.Height * ((double)fixedSize / image.Width));
+            }
+            else
+            {
+                newHeight = fixedSize;
+                newWidth = (int)(image.Width * ((double)fixedSize / image.Height));
             }
 
-            // Load the image using Emgu.CV
-            using (Mat image = CvInvoke.Imread(inputPath))
-            {
-                // Resize the image while maintaining the aspect ratio
-                Mat resizedImage = new Mat();
-                CvInvoke.Resize(image, resizedImage, new System.Drawing.Size(width, height), 0, 0, Emgu.CV.CvEnum.Inter.Linear);
+            var resizedImage = new Mat();
+            CvInvoke.Resize(image, resizedImage, new System.Drawing.Size(newWidth, newHeight), 0, 0, Inter.Linear);
 
-                // Save the resized image to the output path
-                CvInvoke.Imwrite(outputPath, resizedImage);
-            }
+            return resizedImage;
+        }
+
+        public Mat ResizeImageByPercentage(Mat image, int percentage)
+        {
+            int newWidth = (int)(image.Width * (percentage / 100.0));
+            int newHeight = (int)(image.Height * (percentage / 100.0));
+
+            var resizedImage = new Mat();
+            CvInvoke.Resize(image, resizedImage, new System.Drawing.Size(newWidth, newHeight), 0, 0, Inter.Linear);
+
+            return resizedImage;
         }
     }
 }
@@ -329,19 +496,7 @@ namespace ImageProcessingLibrary.Tests
     public class ImageResizerTests
     {
         [Test]
-        public void ResizeImage_ShouldThrowFileNotFoundException_WhenInputFileDoesNotExist()
-        {
-            // Arrange
-            var imageResizer = new ImageResizer();
-            string nonExistentFilePath = "C:\\NonExistentFile.jpg";
-            string outputPath = Path.Combine(Path.GetTempPath(), "output.jpg");
-
-            // Act & Assert
-            Assert.Throws<FileNotFoundException>(() => imageResizer.ResizeImage(nonExistentFilePath, outputPath, 100, 100));
-        }
-
-        [Test]
-        public void ResizeImage_ShouldCreateResizedImage_WhenInputFileExists()
+        public void ResizeImageKeepingAspectRatio_ShouldResizeBasedOnWidth_WhenWidthIsProvided()
         {
             // Arrange
             var imageResizer = new ImageResizer();
@@ -350,24 +505,110 @@ namespace ImageProcessingLibrary.Tests
             string outputPath = Path.Combine(tempDirectory, "output.jpg");
 
             // Create a valid dummy image file
-            using (Bitmap bitmap = new Bitmap(200, 200))
+            using (Bitmap bitmap = new Bitmap(200, 100))
             {
                 using (Graphics g = Graphics.FromImage(bitmap))
                 {
                     g.Clear(Color.White);
-                    g.DrawRectangle(Pens.Black, 10, 10, 180, 180);
+                    g.DrawRectangle(Pens.Black, 10, 10, 180, 80);
                 }
-
                 bitmap.Save(inputPath, ImageFormat.Jpeg);
             }
 
             try
             {
                 // Act
-                imageResizer.ResizeImage(inputPath, outputPath, 100, 100);
+                imageResizer.ResizeImage(inputPath, outputPath, "100", "width");
 
                 // Assert
                 Assert.IsTrue(File.Exists(outputPath));
+                using (var outputImage = Image.FromFile(outputPath))
+                {
+                    Assert.AreEqual(100, outputImage.Width);
+                    Assert.AreEqual(50, outputImage.Height); // Aspect ratio maintained
+                }
+            }
+            finally
+            {
+                // Cleanup
+                File.Delete(inputPath);
+                File.Delete(outputPath);
+            }
+        }
+
+        [Test]
+        public void ResizeImageKeepingAspectRatio_ShouldResizeBasedOnHeight_WhenHeightIsProvided()
+        {
+            // Arrange
+            var imageResizer = new ImageResizer();
+            string tempDirectory = Path.GetTempPath();
+            string inputPath = Path.Combine(tempDirectory, "input.jpg");
+            string outputPath = Path.Combine(tempDirectory, "output.jpg");
+
+            // Create a valid dummy image file
+            using (Bitmap bitmap = new Bitmap(200, 100))
+            {
+                using (Graphics g = Graphics.FromImage(bitmap))
+                {
+                    g.Clear(Color.White);
+                    g.DrawRectangle(Pens.Black, 10, 10, 180, 80);
+                }
+                bitmap.Save(inputPath, ImageFormat.Jpeg);
+            }
+
+            try
+            {
+                // Act
+                imageResizer.ResizeImage(inputPath, outputPath, "50", "height");
+
+                // Assert
+                Assert.IsTrue(File.Exists(outputPath));
+                using (var outputImage = Image.FromFile(outputPath))
+                {
+                    Assert.AreEqual(100, outputImage.Width); // Aspect ratio maintained
+                    Assert.AreEqual(50, outputImage.Height);
+                }
+            }
+            finally
+            {
+                // Cleanup
+                File.Delete(inputPath);
+                File.Delete(outputPath);
+            }
+        }
+
+        [Test]
+        public void ResizeImageByPercentage_ShouldResizeImageCorrectly_WhenPercentageIsProvided()
+        {
+            // Arrange
+            var imageResizer = new ImageResizer();
+            string tempDirectory = Path.GetTempPath();
+            string inputPath = Path.Combine(tempDirectory, "input.jpg");
+            string outputPath = Path.Combine(tempDirectory, "output.jpg");
+
+            // Create a valid dummy image file
+            using (Bitmap bitmap = new Bitmap(200, 100))
+            {
+                using (Graphics g = Graphics.FromImage(bitmap))
+                {
+                    g.Clear(Color.White);
+                    g.DrawRectangle(Pens.Black, 10, 10, 180, 80);
+                }
+                bitmap.Save(inputPath, ImageFormat.Jpeg);
+            }
+
+            try
+            {
+                // Act
+                imageResizer.ResizeImage(inputPath, outputPath, "50%", "");
+
+                // Assert
+                Assert.IsTrue(File.Exists(outputPath));
+                using (var outputImage = Image.FromFile(outputPath))
+                {
+                    Assert.AreEqual(100, outputImage.Width); // 50% of original width
+                    Assert.AreEqual(50, outputImage.Height);  // 50% of original height
+                }
             }
             finally
             {
