@@ -4,7 +4,7 @@ using System.IO;
 
 namespace ImageProcessingLibrary.Helpers
 {
-    internal static class DirectoryHelper
+    public static class DirectoryHelper
     {
         /// <summary>
         /// Validates if the given directory path exists. If it doesn't exist, throws a DirectoryNotFoundException.
@@ -12,15 +12,14 @@ namespace ImageProcessingLibrary.Helpers
         /// <param name="directoryPath">The path of the directory to validate.</param>
         public static void ValidateDirectory(string directoryPath)
         {
+
+            if (directoryPath == null)
+                throw new ArgumentNullException(nameof(directoryPath), "Directory path cannot be null.");
             if (string.IsNullOrWhiteSpace(directoryPath))
-            {
-                throw new ArgumentException("Directory path cannot be null or empty.", nameof(directoryPath));
-            }
+                throw new ArgumentException("Directory path cannot be empty.", nameof(directoryPath));
 
             if (!Directory.Exists(directoryPath))
-            {
-                throw new DirectoryNotFoundException($"The directory '{directoryPath}' does not exist.");
-            }
+                throw new DirectoryNotFoundException($"Directory '{directoryPath}' not found.");
         }
 
         /// <summary>
