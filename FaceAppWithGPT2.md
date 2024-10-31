@@ -6,6 +6,7 @@
 
 - DlibDotNet v19.21.0.20220724
 - Emgu.CV v4.9.0.5494
+- Emgu.CV.Bitmap v4.9.0.5494
 - Emgu.CV.runtime.windows v4.9.0.5494
 - Xabe.FFmpeg v5.2.6
 
@@ -102,6 +103,7 @@ namespace FaceAppWithGPT2
 
 - DlibDotNet v19.21.0.20220724
 - Emgu.CV v4.9.0.5494
+- Emgu.CV.Bitmap v4.9.0.5494
 - Emgu.CV.runtime.windows v4.9.0.5494
 - Xabe.FFmpeg v5.2.6
 
@@ -178,6 +180,121 @@ namespace ImageProcessingLibrary.Helpers
 
 ````
 
+### /ImageProcessingLibrary/Helpers/ImageHelper.cs
+
+```csharp
+using Emgu.CV;
+using Emgu.CV.CvEnum;
+using Emgu.CV.Structure;
+using DlibDotNet;
+using DlibDotNet.Extensions;
+using System.Drawing;
+using System.Collections.Generic;
+using System;
+using ImageProcessingLibrary.Exceptions;
+using ImageProcessingLibrary.Logging;
+
+namespace ImageProcessingLibrary.Helpers
+{
+    public static class AlignmentHelper
+    {
+        /// <summary>
+        /// Detects facial landmarks for a given image using a shape predictor.
+        /// </summary>
+        /// <param name="image">The input image as a Bitmap.</param>
+        /// <param name="shapePredictor">The Dlib shape predictor model to use for detection.</param>
+        /// <returns>A list of detected facial landmarks as PointFs.</returns>
+        public static List<PointF> DetectFacialLandmarks(Bitmap image, ShapePredictor shapePredictor)
+        {
+            if (image == null)
+                throw new ArgumentNullException(nameof(image), "Input image cannot be null.");
+
+            if (shapePredictor == null)
+                throw new ArgumentNullException(nameof(shapePredictor), "Shape predictor cannot be null.");
+
+            using (var dlibImage = image.ToArray2D<RgbPixel>())
+            using (var detector = Dlib.GetFrontalFaceDetector())
+            {
+                var faces = detector.Operator(dlibImage);
+                if (faces.Length == 0)
+                    throw new ImageProcessingException("No face detected in the image.");
+
+                var face = faces[0]; // Assuming only one face for simplicity
+                var landmarks = shapePredictor.Detect(dlibImage, face);
+
+                var points = new List<PointF>();
+                for (uint i = 0; i < landmarks.Parts; i++)
+                {
+                    points.Add(new PointF((float)landmarks.GetPart(i).X, (float)landmarks.GetPart(i).Y));
+                }
+
+                return points;
+            }
+        }
+
+        /// <summary>
+        /// Computes the affine transformation matrix required to align facial landmarks to desired points.
+        /// </summary>
+        /// <param name="sourcePoints">The current facial landmarks as a list of PointF.</param>
+        /// <param name="destinationPoints">The desired facial points for alignment.</param>
+        /// <returns>The affine transformation matrix as a Mat.</returns>
+        public static Mat ComputeAffineTransform(List<PointF> sourcePoints, List<PointF> destinationPoints)
+        {
+            if (sourcePoints == null || sourcePoints.Count != 3)
+                throw new ArgumentException("Source points must contain exactly 3 points.", nameof(sourcePoints));
+
+            if (destinationPoints == null || destinationPoints.Count != 3)
+                throw new ArgumentException("Destination points must contain exactly 3 points.", nameof(destinationPoints));
+
+            return CvInvoke.GetAffineTransform(sourcePoints.ToArray(), destinationPoints.ToArray());
+        }
+
+        /// <summary>
+        /// Applies an affine transformation to an image to align it based on a given transformation matrix.
+        /// </summary>
+        /// <param name="image">The input image as a Mat.</param>
+        /// <param name="transformationMatrix">The affine transformation matrix.</param>
+        /// <param name="outputSize">The desired size of the output image.</param>
+        /// <returns>The aligned image as a Mat.</returns>
+        public static Mat ApplyAffineTransformation(Mat image, Mat transformationMatrix, Size outputSize)
+        {
+            if (image == null || image.IsEmpty)
+                throw new ArgumentNullException(nameof(image), "Input image cannot be null or empty.");
+
+            if (transformationMatrix == null || transformationMatrix.IsEmpty)
+                throw new ArgumentNullException(nameof(transformationMatrix), "Transformation matrix cannot be null or empty.");
+
+            var alignedImage = new Mat();
+            CvInvoke.WarpAffine(image, alignedImage, transformationMatrix, outputSize, Inter.Linear, Warp.Default, BorderType.Constant, new MCvScalar(0, 0, 0));
+
+            return alignedImage;
+        }
+    }
+}
+
+````
+
+### /ImageProcessingLibrary/Interfaces/IFaceAligner.cs
+
+```csharp
+using Emgu.CV;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace ImageProcessingLibrary.Interfaces
+{
+    internal interface IFaceAligner
+    {
+        void AlignFaces(string inputPath, string outputPath);
+        Mat AlignFace(Mat image);
+    }
+}
+
+````
+
 ### /ImageProcessingLibrary/Interfaces/IImageResizer.cs
 
 ```csharp
@@ -248,6 +365,138 @@ namespace ImageProcessingLibrary.Logging
         public static void LogWarning(string message)
         {
             Console.WriteLine($"[WARNING] {DateTime.Now}: {message}");
+        }
+    }
+}
+
+````
+
+### /ImageProcessingLibrary/PictureAlignment/FaceAligner.cs
+
+```csharp
+using Emgu.CV;
+using Emgu.CV.CvEnum;
+using Emgu.CV.Structure;
+using DlibDotNet;
+using DlibDotNet.Extensions;
+using ImageProcessingLibrary.Interfaces;
+using ImageProcessingLibrary.Exceptions;
+using System;
+using System.IO;
+using System.Drawing;
+using System.Drawing.Imaging;
+using Logger = ImageProcessingLibrary.Logging.Logger;
+
+namespace ImageProcessingLibrary.PictureAlignment
+{
+    internal class FaceAligner : IFaceAligner
+    {
+        private readonly ShapePredictor _shapePredictor;
+
+        public FaceAligner()
+        {
+            // Load the pretrained shape predictor model from Dlib
+            try
+            {
+                _shapePredictor = ShapePredictor.Deserialize("shape_predictor_68_face_landmarks.dat");
+            }
+            catch (Exception ex)
+            {
+                throw new ImageProcessingException("Failed to load shape predictor model.", ex);
+            }
+        }
+
+        public void AlignFaces(string inputPath, string outputPath)
+        {
+            try
+            {
+                Logger.LogInfo($"Starting face alignment for image: {inputPath}");
+
+                if (!File.Exists(inputPath))
+                {
+                    throw new FileNotFoundException($"Input file not found: {inputPath}");
+                }
+
+                using (var image = CvInvoke.Imread(inputPath))
+                {
+                    if (image == null || image.IsEmpty)
+                    {
+                        throw new ImageProcessingException($"Failed to load image: {inputPath}");
+                    }
+
+                    using (var alignedImage = AlignFace(image))
+                    {
+                        CvInvoke.Imwrite(outputPath, alignedImage);
+                    }
+                }
+
+                Logger.LogInfo($"Successfully aligned face for image: {inputPath} -> {outputPath}");
+            }
+            catch (FileNotFoundException ex)
+            {
+                Logger.LogError(ex.Message);
+            }
+            catch (ImageProcessingException ex)
+            {
+                Logger.LogError($"Image processing error: {ex.Message}");
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError($"Unexpected error aligning image {inputPath}: {ex.Message}");
+            }
+        }
+
+        public Mat AlignFace(Mat image)
+        {
+            try
+            {
+                using (var detector = Dlib.GetFrontalFaceDetector())
+                {
+                    // Convert Emgu.CV Mat to Bitmap to use with Dlib
+                    using (var bitmap = image.ToBitmap())
+                    {
+                        // Convert Bitmap to Dlib Array2D<RgbPixel>
+                        var dlibImage = bitmap.ToArray2D<RgbPixel>();
+
+                        var faces = detector.Operator(dlibImage);
+
+                        if (faces.Length == 0)
+                        {
+                            throw new ImageProcessingException("No face detected in the image.");
+                        }
+
+                        var face = faces[0]; // Assuming only one face for simplicity
+                        var landmarks = _shapePredictor.Detect(dlibImage, face);
+
+                        // Define the desired facial points for alignment
+                        var desiredPoints = new[]
+                        {
+                            new PointF(30.0f, 30.0f), // Left eye
+                            new PointF(70.0f, 30.0f), // Right eye
+                            new PointF(50.0f, 70.0f)  // Mouth center
+                        };
+
+                        // Extract current facial landmarks
+                        var currentPoints = new[]
+                        {
+                            new PointF(landmarks.GetPart(36).X, landmarks.GetPart(36).Y), // Left eye corner
+                            new PointF(landmarks.GetPart(45).X, landmarks.GetPart(45).Y), // Right eye corner
+                            new PointF(landmarks.GetPart(33).X, landmarks.GetPart(33).Y)  // Nose tip
+                        };
+
+                        // Compute affine transformation
+                        var transformation = CvInvoke.GetAffineTransform(currentPoints, desiredPoints);
+                        var alignedImage = new Mat();
+                        CvInvoke.WarpAffine(image, alignedImage, transformation, image.Size, Inter.Linear, Warp.Default, BorderType.Constant, new MCvScalar(0, 0, 0));
+
+                        return alignedImage;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                throw new ImageProcessingException("Error during face alignment.", ex);
+            }
         }
     }
 }
@@ -386,6 +635,7 @@ namespace ImageProcessingLibrary.PictureSizeAdaptation
 
 - DlibDotNet v19.21.0.20220724
 - Emgu.CV v4.9.0.5494
+- Emgu.CV.Bitmap v4.9.0.5494
 - Emgu.CV.runtime.windows v4.9.0.5494
 - Xabe.FFmpeg v5.2.6
 
@@ -408,6 +658,7 @@ namespace FaceMorphingLibrary
 
 - DlibDotNet v19.21.0.20220724
 - Emgu.CV v4.9.0.5494
+- Emgu.CV.Bitmap v4.9.0.5494
 - Emgu.CV.runtime.windows v4.9.0.5494
 - Xabe.FFmpeg v5.2.6
 
@@ -429,6 +680,7 @@ namespace VideoGenerationLibrary
 ### Dependencies
 
 - coverlet.collector v6.0.0
+- Emgu.CV.Bitmap v4.9.0.5494
 - Emgu.CV.runtime.windows v4.9.0.5494
 - Microsoft.NET.Test.Sdk v17.8.0
 - NUnit v3.14.0
