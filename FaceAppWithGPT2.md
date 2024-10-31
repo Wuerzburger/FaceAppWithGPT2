@@ -374,17 +374,13 @@ namespace ImageProcessingLibrary.Logging
 ### /ImageProcessingLibrary/PictureAlignment/FaceAligner.cs
 
 ```csharp
-using Emgu.CV;
-using Emgu.CV.CvEnum;
-using Emgu.CV.Structure;
 using DlibDotNet;
 using DlibDotNet.Extensions;
-using ImageProcessingLibrary.Interfaces;
+using Emgu.CV;
 using ImageProcessingLibrary.Exceptions;
-using System;
-using System.IO;
+using ImageProcessingLibrary.Helpers;
+using ImageProcessingLibrary.Interfaces;
 using System.Drawing;
-using System.Drawing.Imaging;
 using Logger = ImageProcessingLibrary.Logging.Logger;
 
 namespace ImageProcessingLibrary.PictureAlignment
@@ -402,6 +398,7 @@ namespace ImageProcessingLibrary.PictureAlignment
             }
             catch (Exception ex)
             {
+                Logger.LogError("Failed to load shape predictor model.");
                 throw new ImageProcessingException("Failed to load shape predictor model.", ex);
             }
         }
@@ -450,51 +447,42 @@ namespace ImageProcessingLibrary.PictureAlignment
         {
             try
             {
-                using (var detector = Dlib.GetFrontalFaceDetector())
+                // Convert Emgu.CV Mat to Bitmap to use with Dlib
+                using (var bitmap = image.ToBitmap())
                 {
-                    // Convert Emgu.CV Mat to Bitmap to use with Dlib
-                    using (var bitmap = image.ToBitmap())
+                    // Detect facial landmarks using the helper method
+                    var landmarks = AlignmentHelper.DetectFacialLandmarks(bitmap, _shapePredictor);
+
+                    // Define the desired facial points for alignment
+                    var desiredPoints = new[]
                     {
-                        // Convert Bitmap to Dlib Array2D<RgbPixel>
-                        var dlibImage = bitmap.ToArray2D<RgbPixel>();
+                        new PointF(30.0f, 30.0f), // Left eye
+                        new PointF(70.0f, 30.0f), // Right eye
+                        new PointF(50.0f, 70.0f)  // Mouth center
+                    };
 
-                        var faces = detector.Operator(dlibImage);
+                    // Compute affine transformation using the helper method
+                    var transformation = AlignmentHelper.ComputeAffineTransform(landmarks, new List<PointF>(desiredPoints));
 
-                        if (faces.Length == 0)
-                        {
-                            throw new ImageProcessingException("No face detected in the image.");
-                        }
+                    // Apply affine transformation using the helper method
+                    var alignedImage = AlignmentHelper.ApplyAffineTransformation(image, transformation, image.Size);
 
-                        var face = faces[0]; // Assuming only one face for simplicity
-                        var landmarks = _shapePredictor.Detect(dlibImage, face);
-
-                        // Define the desired facial points for alignment
-                        var desiredPoints = new[]
-                        {
-                            new PointF(30.0f, 30.0f), // Left eye
-                            new PointF(70.0f, 30.0f), // Right eye
-                            new PointF(50.0f, 70.0f)  // Mouth center
-                        };
-
-                        // Extract current facial landmarks
-                        var currentPoints = new[]
-                        {
-                            new PointF(landmarks.GetPart(36).X, landmarks.GetPart(36).Y), // Left eye corner
-                            new PointF(landmarks.GetPart(45).X, landmarks.GetPart(45).Y), // Right eye corner
-                            new PointF(landmarks.GetPart(33).X, landmarks.GetPart(33).Y)  // Nose tip
-                        };
-
-                        // Compute affine transformation
-                        var transformation = CvInvoke.GetAffineTransform(currentPoints, desiredPoints);
-                        var alignedImage = new Mat();
-                        CvInvoke.WarpAffine(image, alignedImage, transformation, image.Size, Inter.Linear, Warp.Default, BorderType.Constant, new MCvScalar(0, 0, 0));
-
-                        return alignedImage;
-                    }
+                    return alignedImage;
                 }
+            }
+            catch (ArgumentException ex)
+            {
+                Logger.LogError($"Invalid argument: {ex.Message}");
+                throw new ImageProcessingException("Error during face alignment due to invalid arguments.", ex);
+            }
+            catch (ImageProcessingException ex)
+            {
+                Logger.LogError($"Image processing error: {ex.Message}");
+                throw;
             }
             catch (Exception ex)
             {
+                Logger.LogError($"Unexpected error during face alignment: {ex.Message}");
                 throw new ImageProcessingException("Error during face alignment.", ex);
             }
         }

@@ -1,15 +1,10 @@
-﻿using Emgu.CV;
-using Emgu.CV.CvEnum;
-using Emgu.CV.Structure;
-using DlibDotNet;
+﻿using DlibDotNet;
 using DlibDotNet.Extensions;
-using System.Drawing;
-using System.Collections.Generic;
-using System;
+using Emgu.CV;
 using ImageProcessingLibrary.Exceptions;
-using ImageProcessingLibrary.Logging;
 using ImageProcessingLibrary.Helpers;
 using ImageProcessingLibrary.Interfaces;
+using System.Drawing;
 using Logger = ImageProcessingLibrary.Logging.Logger;
 
 namespace ImageProcessingLibrary.PictureAlignment
@@ -27,6 +22,7 @@ namespace ImageProcessingLibrary.PictureAlignment
             }
             catch (Exception ex)
             {
+                Logger.LogError("Failed to load shape predictor model.");
                 throw new ImageProcessingException("Failed to load shape predictor model.", ex);
             }
         }
@@ -98,8 +94,19 @@ namespace ImageProcessingLibrary.PictureAlignment
                     return alignedImage;
                 }
             }
+            catch (ArgumentException ex)
+            {
+                Logger.LogError($"Invalid argument: {ex.Message}");
+                throw new ImageProcessingException("Error during face alignment due to invalid arguments.", ex);
+            }
+            catch (ImageProcessingException ex)
+            {
+                Logger.LogError($"Image processing error: {ex.Message}");
+                throw;
+            }
             catch (Exception ex)
             {
+                Logger.LogError($"Unexpected error during face alignment: {ex.Message}");
                 throw new ImageProcessingException("Error during face alignment.", ex);
             }
         }
